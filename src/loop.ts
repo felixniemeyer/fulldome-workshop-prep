@@ -1,5 +1,6 @@
 import { createShader, createProgram } from './shader-utils.js'
 import { vertexShaderSource, fragmentShaderSource } from './shaders.js'
+import { Controls, Transports } from 'av-controls'
 
 export class Loop {
   private canvas: HTMLCanvasElement
@@ -10,8 +11,10 @@ export class Loop {
   private uniformLocations: {
     time: WebGLUniformLocation | null
     resolution: WebGLUniformLocation | null
+    sphereSize: WebGLUniformLocation | null
   }
   private startTime = Date.now()
+  private sphereSize = 0.5
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -24,6 +27,7 @@ export class Loop {
 
     this.setupShaders()
     this.setupGeometry()
+    this.setupControls()
   }
 
   private setupShaders() {
@@ -33,7 +37,8 @@ export class Loop {
 
     this.uniformLocations = {
       time: this.gl.getUniformLocation(this.program, 'u_time'),
-      resolution: this.gl.getUniformLocation(this.program, 'u_resolution')
+      resolution: this.gl.getUniformLocation(this.program, 'u_resolution'),
+      sphereSize: this.gl.getUniformLocation(this.program, 'u_sphereSize')
     }
   }
 
@@ -62,6 +67,43 @@ export class Loop {
     this.gl.vertexAttribPointer(positionLocation, 2, this.gl.FLOAT, false, 0, 0)
 
     this.gl.bindVertexArray(null)
+  }
+
+  private setupControls() {
+    const controlsWindow = window.opener || window.parent
+    new Transports.Window.Receiver(controlsWindow, 'domemaster', new Controls.Group.Receiver(
+      new Controls.Group.SpecWithoutControls(
+        new Controls.Base.Args(
+          'domemaster',
+          0,
+          0,
+          100,
+          100,
+          '#000000'
+        ),
+      ),
+      {
+        'sphereSize': new Controls.Fader.Receiver(
+          new Controls.Fader.Spec(
+            new Controls.Base.Args(
+              'sphereSize',
+              0,
+              0,
+              10,
+              50,
+              '#4a90e2'
+            ),
+            0.5, // initial value
+            0.1, // min value
+            1.5, // max value
+            2 // displayed decimal places
+          ),
+          (value) => {
+            this.sphereSize = value
+          }
+        )
+      }
+    ))
   }
 
   start() {
@@ -99,6 +141,7 @@ export class Loop {
     const time = (Date.now() - this.startTime) / 1000
     this.gl.uniform1f(this.uniformLocations.time, time)
     this.gl.uniform2f(this.uniformLocations.resolution, this.canvas.width, this.canvas.height)
+    this.gl.uniform1f(this.uniformLocations.sphereSize, this.sphereSize)
 
     this.gl.bindVertexArray(this.vao)
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)

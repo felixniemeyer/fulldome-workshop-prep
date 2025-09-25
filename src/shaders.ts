@@ -17,6 +17,7 @@ out vec4 fragColor;
 
 uniform float u_time;
 uniform vec2 u_resolution;
+uniform float u_sphereSize;
 
 float sdSphere(vec3 p, float r) {
   return length(p) - r;
@@ -28,7 +29,7 @@ vec3 repeat(vec3 p, vec3 c) {
 
 float map(vec3 p) {
   vec3 q = repeat(p, vec3(2.0));
-  return sdSphere(q, 0.5);
+  return sdSphere(q, u_sphereSize);
 }
 
 vec3 getNormal(vec3 p) {

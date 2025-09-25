@@ -31,3 +31,8 @@ render spheres with SDF and 3D grid domain repetition.
 
 great. set the canvas aspect ratio to square (fit screen). And then change the view direction calculation, so that the image fullfills domemaster specification. Start rays with distance 1 from the eye to prevent being inside objects. 
 
+# av-controls
+
+I installed av-controls dependency. Can you look at the readme and code in node_modules/av-controls/readme.md|src and then implement the tab receiver? Implement a fader for the sphere size. Introduce the necessary uniforms. 
+
+

@@ -1,0 +1,18 @@
+After a vite project has been initialized and the example code deleted, these prompts have been executed: 
+
+# setup
+
+set up a canvas in index.html
+In main.ts, onload (or immedeately if window is loaded), create a new Loop
+instance from loop.ts
+
+loop.ts gets the canvas element as a parameter and initilizes webgl2
+
+main calls loop.start
+
+loop.start registers for resize events, calls internal resize function
+initially and then calls internal loop() wich calls itself with
+requestAnimFrame
+
+keep the style in the .css file. 
+

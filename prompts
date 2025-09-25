@@ -16,3 +16,16 @@ requestAnimFrame
 
 keep the style in the .css file. 
 
+# clearscreen
+
+Can we clear screen with a random color each frame, to see the loop is 
+  working?
+
+#
+
+Now render a fullscreen quad with a simple vertex shader and raymarching in the fragment shader. 
+
+render spheres with SDF and 3D grid domain repetition. 
+
+
+

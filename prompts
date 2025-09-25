@@ -21,11 +21,13 @@ keep the style in the .css file.
 Can we clear screen with a random color each frame, to see the loop is 
   working?
 
-#
+# sdf raymarching
 
 Now render a fullscreen quad with a simple vertex shader and raymarching in the fragment shader. 
 
 render spheres with SDF and 3D grid domain repetition. 
 
+# fulldome
 
+great. set the canvas aspect ratio to square (fit screen). And then change the view direction calculation, so that the image fullfills domemaster specification. Start rays with distance 1 from the eye to prevent being inside objects. 
 

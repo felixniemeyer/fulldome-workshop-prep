@@ -42,12 +42,28 @@ vec3 getNormal(vec3 p) {
 
 void main() {
   vec2 uv = (v_uv - 0.5) * 2.0;
-  uv.x *= u_resolution.x / u_resolution.y;
+
+  // Domemaster projection
+  float r = length(uv);
+  if (r > 1.0) {
+    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  // Convert to spherical coordinates for dome projection
+  float theta = r * 1.5708; // 0 to pi/2 (90 degrees)
+  float phi = atan(uv.y, uv.x);
+
+  // Convert spherical to cartesian for ray direction
+  vec3 rd = vec3(
+    sin(theta) * cos(phi),
+    sin(theta) * sin(phi),
+    cos(theta)
+  );
 
   vec3 ro = vec3(0.0, 0.0, 5.0 + sin(u_time) * 2.0);
-  vec3 rd = normalize(vec3(uv, -1.0));
 
-  float t = 0.0;
+  float t = 1.0;
   for (int i = 0; i < 64; i++) {
     vec3 p = ro + rd * t;
     float d = map(p);

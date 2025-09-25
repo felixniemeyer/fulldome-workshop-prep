@@ -55,3 +55,8 @@ have a look at node_modules/dome-simulator/src to see how to use it.
 then add a switch control (different control namespace called switch) for enabling simulation (bypass argument in simulator.render) - default off. 
 bind null fb before calling simulator render.
 
+# adjust full/square screen based on simulation
+put the css that makes the canvas square in a css class and toggle along with simulation on off. 
+simulation = fullscreen
+domemaster = square
+

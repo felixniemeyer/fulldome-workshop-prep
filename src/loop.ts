@@ -51,6 +51,9 @@ export class Loop {
     this.setupControls()
 
     this.domeSimulator = new DomeSimulatorPackage(this.gl, this.canvas)
+
+    // Initialize canvas as square (simulation off by default)
+    this.canvas.classList.add('square')
   }
 
   private setupShaders() {
@@ -205,6 +208,12 @@ export class Loop {
           ),
           (value) => {
             this.domeSimEnabled = value
+            // Toggle canvas aspect ratio
+            if (value) {
+              this.canvas.classList.remove('square')
+            } else {
+              this.canvas.classList.add('square')
+            }
           }
         )
       }

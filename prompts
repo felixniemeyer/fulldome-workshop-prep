@@ -35,4 +35,16 @@ great. set the canvas aspect ratio to square (fit screen). And then change the v
 
 I installed av-controls dependency. Can you look at the readme and code in node_modules/av-controls/readme.md|src and then implement the tab receiver? Implement a fader for the sphere size. Introduce the necessary uniforms. 
 
+# camera
 
+Replace the camera movement with a system, where we have targetPos and targetDirection and currentPos and currentDirection
+In each frame mix(currentPos, targetPos, 0.01) and mix(currentDirection, targetDirection, 0.01). Normalize currentDirection. 
+Add a pad control, when clicked: set targetPos to random [-5,5] ^ 3 and targetDirection to normalized(random [-1,1] ^ 3). 
+I added gl-matrix for vector math on the .ts side. 
+Initial pos = 0, initial dir = (0,0,-1), initial targets = currents. 
+ray start = currentPos. 
+for rotation we need 3 vectors: front, up, right. 
+up initiall (0, 1, 0), 
+right initially (1,0,0)
+up and right are calculated after currentDirection is calculated as up = normalize(cross product of front and (previous) right). right = normalize(front, up). 
+In the shader add front, up, right multiplied with the respective ray dir components to transform the ray dir. 

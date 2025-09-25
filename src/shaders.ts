@@ -18,6 +18,10 @@ out vec4 fragColor;
 uniform float u_time;
 uniform vec2 u_resolution;
 uniform float u_sphereSize;
+uniform vec3 u_cameraPos;
+uniform vec3 u_cameraDir;
+uniform vec3 u_cameraUp;
+uniform vec3 u_cameraRight;
 
 float sdSphere(vec3 p, float r) {
   return length(p) - r;
@@ -55,14 +59,21 @@ void main() {
   float theta = r * 1.5708; // 0 to pi/2 (90 degrees)
   float phi = atan(uv.y, uv.x);
 
-  // Convert spherical to cartesian for ray direction
-  vec3 rd = vec3(
+  // Convert spherical to cartesian for ray direction (local space)
+  vec3 localRd = vec3(
     sin(theta) * cos(phi),
     sin(theta) * sin(phi),
     cos(theta)
   );
 
-  vec3 ro = vec3(0.0, 0.0, 5.0 + sin(u_time) * 2.0);
+  // Transform ray direction using camera basis vectors
+  vec3 rd = normalize(
+    u_cameraRight * localRd.x +
+    u_cameraUp * localRd.y +
+    u_cameraDir * localRd.z
+  );
+
+  vec3 ro = u_cameraPos;
 
   float t = 1.0;
   for (int i = 0; i < 64; i++) {

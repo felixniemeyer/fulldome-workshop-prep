@@ -1,6 +1,7 @@
 import { createShader, createProgram } from './shader-utils.js'
 import { vertexShaderSource, fragmentShaderSource } from './shaders.js'
 import { Controls, Transports } from 'av-controls'
+import { vec3 } from 'gl-matrix'
 
 export class Loop {
   private canvas: HTMLCanvasElement
@@ -12,9 +13,21 @@ export class Loop {
     time: WebGLUniformLocation | null
     resolution: WebGLUniformLocation | null
     sphereSize: WebGLUniformLocation | null
+    cameraPos: WebGLUniformLocation | null
+    cameraDir: WebGLUniformLocation | null
+    cameraUp: WebGLUniformLocation | null
+    cameraRight: WebGLUniformLocation | null
   }
   private startTime = Date.now()
   private sphereSize = 0.5
+
+  private currentPos = vec3.fromValues(0, 0, 0)
+  private currentDirection = vec3.fromValues(0, 0, -1)
+  private targetPos = vec3.fromValues(0, 0, 0)
+  private targetDirection = vec3.fromValues(0, 0, -1)
+
+  private currentUp = vec3.create()
+  private currentRight = vec3.create()
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -38,7 +51,11 @@ export class Loop {
     this.uniformLocations = {
       time: this.gl.getUniformLocation(this.program, 'u_time'),
       resolution: this.gl.getUniformLocation(this.program, 'u_resolution'),
-      sphereSize: this.gl.getUniformLocation(this.program, 'u_sphereSize')
+      sphereSize: this.gl.getUniformLocation(this.program, 'u_sphereSize'),
+      cameraPos: this.gl.getUniformLocation(this.program, 'u_cameraPos'),
+      cameraDir: this.gl.getUniformLocation(this.program, 'u_cameraDir'),
+      cameraUp: this.gl.getUniformLocation(this.program, 'u_cameraUp'),
+      cameraRight: this.gl.getUniformLocation(this.program, 'u_cameraRight')
     }
   }
 
@@ -101,6 +118,34 @@ export class Loop {
           (value) => {
             this.sphereSize = value
           }
+        ),
+        'randomMove': new Controls.Pad.Receiver(
+          new Controls.Pad.Spec(
+            new Controls.Base.Args(
+              'randomMove',
+              0,
+              60,
+              10,
+              20,
+              '#e24a4a'
+            ),
+          ),
+          () => {
+            // Set random target position [-5,5]³
+            vec3.set(this.targetPos,
+              (Math.random() - 0.5) * 10,
+              (Math.random() - 0.5) * 10,
+              (Math.random() - 0.5) * 10
+            )
+
+            // Set random target direction [-1,1]³ normalized
+            vec3.set(this.targetDirection,
+              (Math.random() - 0.5) * 2,
+              (Math.random() - 0.5) * 2,
+              (Math.random() - 0.5) * 2
+            )
+            vec3.normalize(this.targetDirection, this.targetDirection)
+          }
         )
       }
     ))
@@ -133,6 +178,21 @@ export class Loop {
   private loop() {
     if (!this.running) return
 
+    // Update camera interpolation
+    vec3.lerp(this.currentPos, this.currentPos, this.targetPos, 0.01)
+    vec3.lerp(this.currentDirection, this.currentDirection, this.targetDirection, 0.01)
+    vec3.normalize(this.currentDirection, this.currentDirection)
+
+    // Calculate camera basis vectors
+    // up = normalize(cross(front, (0,1,0)))
+    const worldUp = vec3.fromValues(0, 1, 0)
+    vec3.cross(this.currentUp, this.currentDirection, worldUp)
+    vec3.normalize(this.currentUp, this.currentUp)
+
+    // right = normalize(cross(front, up))
+    vec3.cross(this.currentRight, this.currentDirection, this.currentUp)
+    vec3.normalize(this.currentRight, this.currentRight)
+
     this.gl.clearColor(0, 0, 0, 1)
     this.gl.clear(this.gl.COLOR_BUFFER_BIT)
 
@@ -142,6 +202,10 @@ export class Loop {
     this.gl.uniform1f(this.uniformLocations.time, time)
     this.gl.uniform2f(this.uniformLocations.resolution, this.canvas.width, this.canvas.height)
     this.gl.uniform1f(this.uniformLocations.sphereSize, this.sphereSize)
+    this.gl.uniform3fv(this.uniformLocations.cameraPos, this.currentPos)
+    this.gl.uniform3fv(this.uniformLocations.cameraDir, this.currentDirection)
+    this.gl.uniform3fv(this.uniformLocations.cameraUp, this.currentUp)
+    this.gl.uniform3fv(this.uniformLocations.cameraRight, this.currentRight)
 
     this.gl.bindVertexArray(this.vao)
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)

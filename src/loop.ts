@@ -2,6 +2,7 @@ import { createShader, createProgram } from './shader-utils.js'
 import { vertexShaderSource, fragmentShaderSource } from './shaders.js'
 import { Controls, Transports } from 'av-controls'
 import { vec3 } from 'gl-matrix'
+import DomeSimulatorPackage from 'dome-simulator'
 
 export class Loop {
   private canvas: HTMLCanvasElement
@@ -20,6 +21,12 @@ export class Loop {
   }
   private startTime = Date.now()
   private sphereSize = 0.5
+  private domeSimEnabled = false
+
+  // Framebuffer and texture for intermediate rendering
+  private fbo: WebGLFramebuffer | null = null
+  private fboTexture: WebGLTexture | null = null
+  private domeSimulator: DomeSimulatorPackage
 
   private currentPos = vec3.fromValues(0, 0, 0)
   private currentDirection = vec3.fromValues(0, 0, -1)
@@ -40,7 +47,10 @@ export class Loop {
 
     this.setupShaders()
     this.setupGeometry()
+    this.setupFramebuffer()
     this.setupControls()
+
+    this.domeSimulator = new DomeSimulatorPackage(this.gl, this.canvas)
   }
 
   private setupShaders() {
@@ -84,6 +94,40 @@ export class Loop {
     this.gl.vertexAttribPointer(positionLocation, 2, this.gl.FLOAT, false, 0, 0)
 
     this.gl.bindVertexArray(null)
+  }
+
+  private setupFramebuffer() {
+    this.fbo = this.gl.createFramebuffer()
+    if (!this.fbo) {
+      throw new Error('Failed to create framebuffer')
+    }
+
+    this.fboTexture = this.gl.createTexture()
+    if (!this.fboTexture) {
+      throw new Error('Failed to create texture')
+    }
+
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.fboTexture)
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR)
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR)
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE)
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE)
+
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo)
+    this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.fboTexture, 0)
+
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null)
+    this.gl.bindTexture(this.gl.TEXTURE_2D, null)
+  }
+
+  private updateFramebufferSize() {
+    if (!this.fboTexture) return
+
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.fboTexture)
+    this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.canvas.width, this.canvas.height, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, null)
+    this.gl.bindTexture(this.gl.TEXTURE_2D, null)
+
+    this.domeSimulator.setResolution(this.canvas.width, this.canvas.height)
   }
 
   private setupControls() {
@@ -146,6 +190,22 @@ export class Loop {
             )
             vec3.normalize(this.targetDirection, this.targetDirection)
           }
+        ),
+        'domeSimulation': new Controls.Switch.Receiver(
+          new Controls.Switch.Spec(
+            new Controls.Base.Args(
+              'domeSimulation',
+              0,
+              90,
+              10,
+              15,
+              '#6a4c93'
+            ),
+            false // initial value (off)
+          ),
+          (value) => {
+            this.domeSimEnabled = value
+          }
         )
       }
     ))
@@ -173,6 +233,7 @@ export class Loop {
     this.canvas.height = rect.height * dpr
 
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+    this.updateFramebufferSize()
   }
 
   private loop() {
@@ -193,6 +254,10 @@ export class Loop {
     vec3.cross(this.currentRight, this.currentDirection, this.currentUp)
     vec3.normalize(this.currentRight, this.currentRight)
 
+    // Always render to framebuffer first
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo)
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+
     this.gl.clearColor(0, 0, 0, 1)
     this.gl.clear(this.gl.COLOR_BUFFER_BIT)
 
@@ -209,6 +274,13 @@ export class Loop {
 
     this.gl.bindVertexArray(this.vao)
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)
+
+    // Always use dome simulator for final rendering
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null)
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+    if (this.fboTexture) {
+      this.domeSimulator.render(this.fboTexture, this.domeSimEnabled)
+    }
 
     requestAnimationFrame(() => this.loop())
   }

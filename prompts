@@ -48,3 +48,10 @@ up initiall (0, 1, 0),
 right initially (1,0,0)
 up and right are calculated after currentDirection is calculated as up = normalize(cross product of front and (previous) right). right = normalize(front, up). 
 In the shader add front, up, right multiplied with the respective ray dir components to transform the ray dir. 
+
+# dome simulator
+we added dome simulator dependency. let's render to a intermediary texture first and then always use dome-simulator for final rendering. that means creating a fbo and attach a texture. Let's update/create the texture on resize, use canvas resolution. Linear filtering. 
+have a look at node_modules/dome-simulator/src to see how to use it. 
+then add a switch control (different control namespace called switch) for enabling simulation (bypass argument in simulator.render) - default off. 
+bind null fb before calling simulator render.
+

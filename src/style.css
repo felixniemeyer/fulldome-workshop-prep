@@ -26,6 +26,10 @@ body {
   margin: 0;
   padding: 0;
   background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
 }
 
 canvas {
@@ -37,7 +41,6 @@ canvas {
 canvas.square {
   width: 100vmin;
   height: 100vmin;
-  margin: auto;
 }
 
 h1 {

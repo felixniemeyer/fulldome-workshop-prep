@@ -2,7 +2,7 @@ import { createShader, createProgram } from './shader-utils.js'
 import { vertexShaderSource, fragmentShaderSource } from './shaders.js'
 import { Controls, Transports } from 'av-controls'
 import { vec3 } from 'gl-matrix'
-import DomeSimulatorPackage from 'dome-simulator'
+import Simulator from 'dome-simulator'
 
 export class Loop {
   private canvas: HTMLCanvasElement
@@ -26,7 +26,7 @@ export class Loop {
   // Framebuffer and texture for intermediate rendering
   private fbo: WebGLFramebuffer | null = null
   private fboTexture: WebGLTexture | null = null
-  private domeSimulator: DomeSimulatorPackage
+  private domeSimulator: Simulator
 
   private currentPos = vec3.fromValues(0, 0, 0)
   private currentDirection = vec3.fromValues(0, 0, -1)
@@ -50,7 +50,7 @@ export class Loop {
     this.setupFramebuffer()
     this.setupControls()
 
-    this.domeSimulator = new DomeSimulatorPackage(this.gl, this.canvas)
+    this.domeSimulator = new Simulator(this.gl, this.canvas)
 
     // Initialize canvas as square (simulation off by default)
     this.canvas.classList.add('square')
@@ -126,8 +126,11 @@ export class Loop {
   private updateFramebufferSize() {
     if (!this.fboTexture) return
 
+    // Intermediary texture should always be square (domemaster format)
+    const size = Math.min(this.canvas.width, this.canvas.height)
+
     this.gl.bindTexture(this.gl.TEXTURE_2D, this.fboTexture)
-    this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.canvas.width, this.canvas.height, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, null)
+    this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, size, size, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, null)
     this.gl.bindTexture(this.gl.TEXTURE_2D, null)
 
     this.domeSimulator.setResolution(this.canvas.width, this.canvas.height)
@@ -153,8 +156,8 @@ export class Loop {
               'sphereSize',
               0,
               0,
-              10,
-              50,
+              30,
+              40,
               '#4a90e2'
             ),
             0.5, // initial value
@@ -170,10 +173,10 @@ export class Loop {
           new Controls.Pad.Spec(
             new Controls.Base.Args(
               'randomMove',
+              35,
               0,
-              60,
-              10,
-              20,
+              25,
+              25,
               '#e24a4a'
             ),
           ),
@@ -198,10 +201,10 @@ export class Loop {
           new Controls.Switch.Spec(
             new Controls.Base.Args(
               'domeSimulation',
+              65,
               0,
-              90,
-              10,
-              15,
+              30,
+              25,
               '#6a4c93'
             ),
             false // initial value (off)
@@ -214,6 +217,8 @@ export class Loop {
             } else {
               this.canvas.classList.add('square')
             }
+            // Defer resize until next frame to ensure DOM changes are applied
+            requestAnimationFrame(() => this.resize())
           }
         )
       }
@@ -263,9 +268,10 @@ export class Loop {
     vec3.cross(this.currentRight, this.currentDirection, this.currentUp)
     vec3.normalize(this.currentRight, this.currentRight)
 
-    // Always render to framebuffer first
+    // Always render to framebuffer first (square domemaster format)
+    const size = Math.min(this.canvas.width, this.canvas.height)
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo)
-    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+    this.gl.viewport(0, 0, size, size)
 
     this.gl.clearColor(0, 0, 0, 1)
     this.gl.clear(this.gl.COLOR_BUFFER_BIT)
@@ -274,7 +280,7 @@ export class Loop {
 
     const time = (Date.now() - this.startTime) / 1000
     this.gl.uniform1f(this.uniformLocations.time, time)
-    this.gl.uniform2f(this.uniformLocations.resolution, this.canvas.width, this.canvas.height)
+    this.gl.uniform2f(this.uniformLocations.resolution, size, size)
     this.gl.uniform1f(this.uniformLocations.sphereSize, this.sphereSize)
     this.gl.uniform3fv(this.uniformLocations.cameraPos, this.currentPos)
     this.gl.uniform3fv(this.uniformLocations.cameraDir, this.currentDirection)

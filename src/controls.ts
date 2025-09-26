@@ -1,7 +1,6 @@
 import * as AvControls from 'av-controls'
 
 export class ControlManager {
-  private receiver: AvControls.Transports.Window.Receiver
   private sphereSize = 0.5
 
   constructor(private loop: any) {
@@ -46,7 +45,7 @@ export class ControlManager {
       throw new Error('Failed to open control window')
     }
 
-    this.receiver = new AvControls.Transports.Window.Receiver(
+    new AvControls.Transports.Window.Receiver(
       controlWindow,
       'Domemaster Controls',
       tabsReceiver

@@ -97,3 +97,69 @@ void main() {
   fragColor = vec4(0.05, 0.05, 0.1, 1.0);
 }
 `
+
+export const lineVertexShaderSource = `#version 300 es
+
+in vec3 a_position;
+out vec3 v_worldPos;
+out float v_transformedZ;
+
+uniform mat4 u_rotationMatrix;
+uniform vec3 u_cameraPos;
+uniform vec3 u_cameraDir;
+uniform vec3 u_cameraUp;
+uniform vec3 u_cameraRight;
+
+void main() {
+  // Apply inverted/transposed rotation matrix to move vertices into perspective
+  vec3 rotatedPos = (transpose(u_rotationMatrix) * vec4(a_position, 1.0)).xyz;
+
+  // Store world position for fragment shader
+  v_worldPos = rotatedPos;
+
+  // Convert world space to camera space
+  vec3 relativeToCam = rotatedPos - u_cameraPos;
+
+  // Project to camera coordinates
+  float x = dot(relativeToCam, u_cameraRight);
+  float y = dot(relativeToCam, u_cameraUp);
+  float z = dot(relativeToCam, u_cameraDir);
+
+  // Store the transformed z for fragment shader alpha check
+  v_transformedZ = z;
+
+  // Normalize xyz position for domemaster projection
+  vec3 normalized = normalize(vec3(x, y, z));
+
+  // Convert to domemaster coordinates
+  float theta = acos(normalized.z); // angle from zenith
+  float phi = atan(normalized.y, normalized.x); // azimuth angle
+
+  // Map to screen space (domemaster projection)
+  float r = theta / 1.5708; // normalize to [0,1] range
+  vec2 screenPos = r * vec2(cos(phi), sin(phi));
+
+  gl_Position = vec4(screenPos, 0.0, 1.0);
+}
+`
+
+export const lineFragmentShaderSource = `#version 300 es
+precision highp float;
+
+in vec3 v_worldPos;
+in float v_transformedZ;
+out vec4 fragColor;
+
+void main() {
+  // If transformed z is negative, set alpha to 0 (behind camera)
+  float alpha = v_transformedZ < 0.0 ? 0.0 : 1.0;
+
+  // Output depth as color for visualization
+  float depth = v_transformedZ * 0.1 + 0.5; // scale and offset for visibility
+
+  // Line color with depth-based intensity
+  vec3 color = vec3(0.8, 0.6, 1.0) * (1.0 - abs(depth - 0.5));
+
+  fragColor = vec4(color, alpha);
+}
+`

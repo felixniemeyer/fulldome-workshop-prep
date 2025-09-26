@@ -1,16 +1,18 @@
 import { createShader, createProgram } from './shader-utils.js'
-import { vertexShaderSource, fragmentShaderSource } from './shaders.js'
+import { vertexShaderSource, fragmentShaderSource, lineVertexShaderSource, lineFragmentShaderSource } from './shaders.js'
 import { Controls, Transports } from 'av-controls'
-import { vec3 } from 'gl-matrix'
+import { vec3, mat4 } from 'gl-matrix'
 import Simulator from 'dome-simulator'
 
 export class Loop {
   private canvas: HTMLCanvasElement
   private gl: WebGL2RenderingContext
   private running = false
-  private program: WebGLProgram
-  private vao: WebGLVertexArrayObject
-  private uniformLocations: {
+  private program!: WebGLProgram
+  private lineProgram!: WebGLProgram
+  private vao!: WebGLVertexArrayObject
+  private lineVao!: WebGLVertexArrayObject
+  private uniformLocations!: {
     time: WebGLUniformLocation | null
     resolution: WebGLUniformLocation | null
     sphereSize: WebGLUniformLocation | null
@@ -19,9 +21,19 @@ export class Loop {
     cameraUp: WebGLUniformLocation | null
     cameraRight: WebGLUniformLocation | null
   }
+  private lineUniformLocations!: {
+    rotationMatrix: WebGLUniformLocation | null
+    cameraPos: WebGLUniformLocation | null
+    cameraDir: WebGLUniformLocation | null
+    cameraUp: WebGLUniformLocation | null
+    cameraRight: WebGLUniformLocation | null
+  }
   private startTime = Date.now()
   private sphereSize = 0.5
   private domeSimEnabled = false
+  private lineVertices: Float32Array
+  private lineIndices: Uint16Array
+  private lineIndexCount: number
 
   // Framebuffer and texture for intermediate rendering
   private fbo: WebGLFramebuffer | null = null
@@ -35,6 +47,7 @@ export class Loop {
 
   private currentUp = vec3.create()
   private currentRight = vec3.create()
+  private rotationMatrix = mat4.create()
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -45,10 +58,20 @@ export class Loop {
     }
     this.gl = gl
 
+    // Generate line geometry
+    const { vertices, indices, indexCount } = this.generateLineGeometry()
+    this.lineVertices = vertices
+    this.lineIndices = indices
+    this.lineIndexCount = indexCount
+
     this.setupShaders()
     this.setupGeometry()
     this.setupFramebuffer()
     this.setupControls()
+
+    // Enable alpha blending for line rendering
+    this.gl.enable(this.gl.BLEND)
+    this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA)
 
     this.domeSimulator = new Simulator(this.gl, this.canvas)
 
@@ -56,7 +79,59 @@ export class Loop {
     this.canvas.classList.add('square')
   }
 
+  private generateLineGeometry() {
+    // Generate 64 vertices iteratively
+    const points: vec3[] = []
+
+    // First vertex at origin
+    points.push(vec3.fromValues(0, 0, 0))
+
+    // Generate remaining vertices iteratively
+    for (let i = 1; i < 64; i++) {
+      const prevPoint = points[i - 1]!
+
+      // next = prev * 0.2 + (random, random, random) - 0.5
+      const next = vec3.create()
+      vec3.scale(next, prevPoint, 0.2)
+
+      const randomOffset = vec3.fromValues(
+        Math.random() - 0.5,
+        Math.random() - 0.5,
+        Math.random() - 0.5
+      )
+
+      vec3.add(next, next, randomOffset)
+      points.push(next)
+    }
+
+    // Create vertices array with 10x scaling
+    const vertices: number[] = []
+    points.forEach(point => {
+      vertices.push(point[0] * 10, point[1] * 10, point[2] * 10)
+    })
+
+    // Generate indices based on probability: Math.random() > distance
+    const indices: number[] = []
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        const distance = vec3.distance(points[i]!, points[j]!)
+
+        // Connect if random > distance
+        if (Math.random() > distance) {
+          indices.push(i, j)
+        }
+      }
+    }
+
+    return {
+      vertices: new Float32Array(vertices),
+      indices: new Uint16Array(indices),
+      indexCount: indices.length
+    }
+  }
+
   private setupShaders() {
+    // Ray marching program
     const vertexShader = createShader(this.gl, this.gl.VERTEX_SHADER, vertexShaderSource)
     const fragmentShader = createShader(this.gl, this.gl.FRAGMENT_SHADER, fragmentShaderSource)
     this.program = createProgram(this.gl, vertexShader, fragmentShader)
@@ -70,9 +145,23 @@ export class Loop {
       cameraUp: this.gl.getUniformLocation(this.program, 'u_cameraUp'),
       cameraRight: this.gl.getUniformLocation(this.program, 'u_cameraRight')
     }
+
+    // Line rendering program
+    const lineVertexShader = createShader(this.gl, this.gl.VERTEX_SHADER, lineVertexShaderSource)
+    const lineFragmentShader = createShader(this.gl, this.gl.FRAGMENT_SHADER, lineFragmentShaderSource)
+    this.lineProgram = createProgram(this.gl, lineVertexShader, lineFragmentShader)
+
+    this.lineUniformLocations = {
+      rotationMatrix: this.gl.getUniformLocation(this.lineProgram, 'u_rotationMatrix'),
+      cameraPos: this.gl.getUniformLocation(this.lineProgram, 'u_cameraPos'),
+      cameraDir: this.gl.getUniformLocation(this.lineProgram, 'u_cameraDir'),
+      cameraUp: this.gl.getUniformLocation(this.lineProgram, 'u_cameraUp'),
+      cameraRight: this.gl.getUniformLocation(this.lineProgram, 'u_cameraRight')
+    }
   }
 
   private setupGeometry() {
+    // Quad geometry for ray marching
     const positions = new Float32Array([
       -1, -1,
        1, -1,
@@ -95,6 +184,31 @@ export class Loop {
     const positionLocation = this.gl.getAttribLocation(this.program, 'a_position')
     this.gl.enableVertexAttribArray(positionLocation)
     this.gl.vertexAttribPointer(positionLocation, 2, this.gl.FLOAT, false, 0, 0)
+
+    this.gl.bindVertexArray(null)
+
+    // Line geometry with indexed rendering
+    const lineVao = this.gl.createVertexArray()
+    if (!lineVao) {
+      throw new Error('Failed to create line VAO')
+    }
+    this.lineVao = lineVao
+
+    this.gl.bindVertexArray(lineVao)
+
+    // Vertex buffer
+    const lineBuffer = this.gl.createBuffer()
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, lineBuffer)
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, this.lineVertices, this.gl.STATIC_DRAW)
+
+    const linePositionLocation = this.gl.getAttribLocation(this.lineProgram, 'a_position')
+    this.gl.enableVertexAttribArray(linePositionLocation)
+    this.gl.vertexAttribPointer(linePositionLocation, 3, this.gl.FLOAT, false, 0, 0)
+
+    // Index buffer
+    const indexBuffer = this.gl.createBuffer()
+    this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
+    this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, this.lineIndices, this.gl.STATIC_DRAW)
 
     this.gl.bindVertexArray(null)
   }
@@ -268,6 +382,15 @@ export class Loop {
     vec3.cross(this.currentRight, this.currentDirection, this.currentUp)
     vec3.normalize(this.currentRight, this.currentRight)
 
+    // Update rotation matrix from camera basis vectors
+    mat4.identity(this.rotationMatrix)
+    mat4.set(this.rotationMatrix,
+      this.currentRight[0], this.currentUp[0], this.currentDirection[0], 0,
+      this.currentRight[1], this.currentUp[1], this.currentDirection[1], 0,
+      this.currentRight[2], this.currentUp[2], this.currentDirection[2], 0,
+      0, 0, 0, 1
+    )
+
     // Always render to framebuffer first (square domemaster format)
     const size = Math.min(this.canvas.width, this.canvas.height)
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo)
@@ -289,6 +412,17 @@ export class Loop {
 
     this.gl.bindVertexArray(this.vao)
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)
+
+    // Render lines on top
+    this.gl.useProgram(this.lineProgram)
+    this.gl.uniformMatrix4fv(this.lineUniformLocations.rotationMatrix, false, this.rotationMatrix)
+    this.gl.uniform3fv(this.lineUniformLocations.cameraPos, this.currentPos)
+    this.gl.uniform3fv(this.lineUniformLocations.cameraDir, this.currentDirection)
+    this.gl.uniform3fv(this.lineUniformLocations.cameraUp, this.currentUp)
+    this.gl.uniform3fv(this.lineUniformLocations.cameraRight, this.currentRight)
+
+    this.gl.bindVertexArray(this.lineVao)
+    this.gl.drawElements(this.gl.LINES, this.lineIndexCount, this.gl.UNSIGNED_SHORT, 0)
 
     // Always use dome simulator for final rendering
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null)

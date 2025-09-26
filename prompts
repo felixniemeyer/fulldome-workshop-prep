@@ -1,6 +1,7 @@
+# prompts
 After a vite project has been initialized and the example code deleted, these prompts have been executed: 
 
-# setup
+## setup
 
 set up a canvas in index.html
 In main.ts, onload (or immedeately if window is loaded), create a new Loop
@@ -16,26 +17,26 @@ requestAnimFrame
 
 keep the style in the .css file. 
 
-# clearscreen
+## clearscreen
 
 Can we clear screen with a random color each frame, to see the loop is 
   working?
 
-# sdf raymarching
+## sdf raymarching
 
 Now render a fullscreen quad with a simple vertex shader and raymarching in the fragment shader. 
 
 render spheres with SDF and 3D grid domain repetition. 
 
-# fulldome
+## fulldome
 
 great. set the canvas aspect ratio to square (fit screen). And then change the view direction calculation, so that the image fullfills domemaster specification. Start rays with distance 1 from the eye to prevent being inside objects. 
 
-# av-controls
+## av-controls
 
 I installed av-controls dependency. Can you look at the readme and code in node_modules/av-controls/readme.md|src and then implement the tab receiver? Implement a fader for the sphere size. Introduce the necessary uniforms. 
 
-# camera
+## camera
 
 Replace the camera movement with a system, where we have targetPos and targetDirection and currentPos and currentDirection
 In each frame mix(currentPos, targetPos, 0.01) and mix(currentDirection, targetDirection, 0.01). Normalize currentDirection. 
@@ -47,16 +48,29 @@ for rotation we need 3 vectors: front, up, right.
 up initiall (0, 1, 0), 
 right initially (1,0,0)
 up and right are calculated after currentDirection is calculated as up = normalize(cross product of front and (previous) right). right = normalize(front, up). 
-In the shader add front, up, right multiplied with the respective ray dir components to transform the ray dir. 
+Pass front, up, right as a rotation mat3x3 to the shader. There apply it to the ray dir. 
 
-# dome simulator
+## dome simulator
 we added dome simulator dependency. let's render to a intermediary texture first and then always use dome-simulator for final rendering. that means creating a fbo and attach a texture. Let's update/create the texture on resize, use canvas resolution. Linear filtering. 
 have a look at node_modules/dome-simulator/src to see how to use it. 
 then add a switch control (different control namespace called switch) for enabling simulation (bypass argument in simulator.render) - default off. 
 bind null fb before calling simulator render.
 
-# adjust full/square screen based on simulation
+## adjust full/square screen based on simulation
 put the css that makes the canvas square in a css class and toggle along with simulation on off. 
 simulation = fullscreen
 domemaster = square
+
+# optional 
+
+## lines
+Render gl lines with a couple of lines between 64 random points e[-10,10].
+Apply the inverse cameraTranslation and use the inverted/transposed rotationMatrix to move the line vertices into perspective.
+normalize the resulting xyz position to determine the correct frag coord in dome master. 
+output correct depth. if z is negative, set alpha to 0. 
+use alpha blending. 
+
+## interesting connections
+make lines interconnected: render them indexed, when generating, calc positions iterateively. first vertex is at 0,0. next at first * 0.2 + (math.random(),math.random) - 0.5
+make vertices to connect dots based on a probability: Math.random() > distance between the two. 
 
